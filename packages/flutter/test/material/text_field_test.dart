@@ -16183,9 +16183,9 @@ void main() {
 
         await click(find.text('Outside'));
 
-        switch(pointerDeviceKind) {
+        switch (pointerDeviceKind) {
           case PointerDeviceKind.touch:
-            switch(defaultTargetPlatform) {
+            switch (defaultTargetPlatform) {
               case TargetPlatform.iOS:
               case TargetPlatform.android:
               case TargetPlatform.fuchsia:
@@ -16257,6 +16257,111 @@ void main() {
         expect(spellCheckToolbar, isA<SpellCheckSuggestionsToolbar>());
     }
   }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.android, TargetPlatform.iOS }));
+
+  testWidgets('Builds the corresponding default spell check configuration by platform', (WidgetTester tester) async {
+    tester.binding.platformDispatcher.nativeSpellCheckServiceDefinedTestValue =
+      true;
+
+    final SpellCheckConfiguration expectedConfiguration;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        expectedConfiguration = SpellCheckConfiguration(
+          misspelledTextStyle: CupertinoTextField.cupertinoMisspelledTextStyle,
+          misspelledSelectionColor: CupertinoTextField.kMisspelledSelectionColor,
+          spellCheckService: DefaultSpellCheckService(),
+          spellCheckSuggestionsToolbarBuilder: CupertinoTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+        );
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        expectedConfiguration = SpellCheckConfiguration(
+          misspelledTextStyle: TextField.materialMisspelledTextStyle,
+          spellCheckService: DefaultSpellCheckService(),
+          spellCheckSuggestionsToolbarBuilder: TextField.defaultSpellCheckSuggestionsToolbarBuilder,
+        );
+    }
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: TextField(
+              autofocus: true,
+              spellCheckConfiguration: SpellCheckConfiguration(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final EditableTextState editableTextState =
+        tester.state<EditableTextState>(find.byType(EditableText));
+
+    expect(
+      editableTextState.spellCheckConfiguration.misspelledTextStyle,
+      expectedConfiguration.misspelledTextStyle,
+    );
+    expect(
+      editableTextState.spellCheckConfiguration.misspelledSelectionColor,
+      expectedConfiguration.misspelledSelectionColor,
+    );
+    expect(
+      editableTextState.spellCheckConfiguration.spellCheckService.runtimeType,
+      expectedConfiguration.spellCheckService.runtimeType,
+    );
+    expect(
+      editableTextState.spellCheckConfiguration.spellCheckSuggestionsToolbarBuilder,
+      expectedConfiguration.spellCheckSuggestionsToolbarBuilder,
+    );
+  }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.android, TargetPlatform.iOS }));
+
+  testWidgets('text selection toolbar is hidden on tap down', (WidgetTester tester) async {
+    final TextEditingController controller = TextEditingController(
+      text: 'blah1 blah2',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: TextField(
+              controller: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+
+    TestGesture gesture = await tester.startGesture(
+      textOffsetToPosition(tester, 8),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+
+    gesture = await tester.startGesture(
+      textOffsetToPosition(tester, 2),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+
+    // After the gesture is down but not up, the toolbar is already gone.
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+  },
+    skip: isContextMenuProvidedByPlatform, // [intended] only applies to platforms where we supply the context menu.
+    variant: TargetPlatformVariant.all(excluding: <TargetPlatform>{ TargetPlatform.iOS }),
+  );
 }
 
 /// A Simple widget for testing the obscure text.
